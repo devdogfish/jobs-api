@@ -27,7 +27,7 @@ app.set("trust proxy", 1);
 // CORS configuration - must be before other middleware
 const allowedOrigins =
   process.env.NODE_ENV === "production"
-    ? ["https://jobs.luigigirke.com", "https://jobs-demo.luigigirke.com"]
+    ? ["https://jobs.demo.girke.dev"]
     : ["http://localhost:5173", "http://localhost:3000"];
 
 app.use(
@@ -41,7 +41,7 @@ app.use(
       return callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
-  })
+  }),
 );
 
 app.use(express.json());
@@ -50,12 +50,12 @@ app.use(express.json());
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const SESSION_MAX_AGE_HOURS = parseInt(
   process.env.SESSION_MAX_AGE_HOURS || "24",
-  10
+  10,
 );
 
 if (!SESSION_SECRET) {
   console.warn(
-    "WARNING: SESSION_SECRET not set. Using insecure default for development."
+    "WARNING: SESSION_SECRET not set. Using insecure default for development.",
   );
 }
 
@@ -68,11 +68,10 @@ app.use(
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      domain:
-        process.env.NODE_ENV === "production" ? ".luigigirke.com" : undefined,
+      domain: process.env.NODE_ENV === "production" ? ".girke.dev" : undefined,
       maxAge: SESSION_MAX_AGE_HOURS * 60 * 60 * 1000,
     },
-  })
+  }),
 );
 
 // Register routes
