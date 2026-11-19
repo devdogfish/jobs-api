@@ -30,6 +30,7 @@ The API uses two authentication mechanisms:
 | `/auth/logout` | POST | Public | Logout |
 | `/auth/session` | GET | Public | Check auth status |
 | `/create-resume` | POST | API Key | Generate resume PDF |
+| `/render-resume` | POST | API Key | Render supplied Markdown and return the PDF |
 | `/base-resume` | GET | API Key | Base resume JSON |
 | `/test` | GET | API Key | Test PDF generation |
 | `/transcribe-ogg` | POST | API Key | Audio transcription |
@@ -44,6 +45,8 @@ Add header `X-API-Key` to requests:
 curl http://localhost:3000/base-resume \
   -H "X-API-Key: your-api-key"
 ```
+
+`POST /render-resume` takes JSON with `markdown` and an optional `trackingLinks` map from exact source URLs to replacement URLs. Supply the name as the first H1 and the contact line immediately below it. The endpoint uses the Jobs API résumé typography and returns `application/pdf` without an upload.
 
 ### Session Auth (Frontend)
 

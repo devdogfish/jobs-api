@@ -15,6 +15,7 @@ import "./config/index.js";
 // Import routes
 import healthRoutes from "./routes/health.js";
 import resumeRoutes from "./routes/resume.js";
+import markdownResumeRoutes from "./routes/markdownResume.js";
 import transcribeRoutes from "./routes/transcribe.js";
 import authRoutes from "./routes/auth.js";
 import jobsRoutes from "./routes/jobs.js";
@@ -44,6 +45,7 @@ app.use(
   }),
 );
 
+app.use(markdownResumeRoutes);
 app.use(express.json());
 
 // Session configuration
