@@ -1,6 +1,6 @@
 import { Router, json, type ErrorRequestHandler, type Request, type Response } from "express";
 import { FONTS, hasCambria } from "../config/index.js";
-import { requireApiKey } from "../middleware/apiKeyAuth.js";
+import { requireRenderApiKey } from "../middleware/apiKeyAuth.js";
 import {
   InvalidMarkdownResume,
   markdownResumeRenderer,
@@ -18,7 +18,7 @@ const invalidBody: ErrorRequestHandler = (error, _req, res, _next) => {
   });
 };
 
-router.post("/render-resume", requireApiKey, json({ limit: "400kb" }), async (req: Request, res: Response) => {
+router.post("/render-resume", requireRenderApiKey, json({ limit: "400kb" }), async (req: Request, res: Response) => {
   res.setHeader("Cache-Control", "no-store");
   try {
     const { pdf, retainedTracking } = await renderMarkdownResume(req.body, hasCambria, FONTS);
