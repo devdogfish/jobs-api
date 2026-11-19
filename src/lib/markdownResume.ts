@@ -35,7 +35,16 @@ function validLink(target: string, protocol?: string) {
   }
 }
 
-type RunStyle = { bold?: boolean; italic?: boolean; link?: string };
+type RunStyle = { bold?: boolean; italic?: boolean; link?: string; icon?: boolean; small?: boolean };
+
+// Links render as blue text on a pale pill. Body links end with an external-link icon inside the pill.
+const linkColor = "#0b4fd6";
+const linkHighlight = "#e6eefc";
+const iconSize = 7;
+const iconGap = 2.4;
+const iconPadding = 1.8;
+// Links inside larger heading lines use body size, centered on the heading's text.
+const bodySize = 10;
 type Run = RunStyle & { text: string };
 type Row = {
   runs: Run[];
@@ -85,7 +94,8 @@ function makeRows(markdown: string, trackingLinks: Map<string, string>) {
           for (const key of keysByReplacement.get(replacement ?? node.url) ?? []) {
             retainedTracking.add(key);
           }
-          return inline(node.children, { ...style, link: replacement ?? node.url }, depth + 1);
+          const linked = inline(node.children, { ...style, link: replacement ?? node.url }, depth + 1);
+          return [...linked, { ...style, link: replacement ?? node.url, icon: true, text: "" }];
         }
         default:
           throw new InvalidMarkdownResume();
@@ -109,7 +119,7 @@ function makeRows(markdown: string, trackingLinks: Map<string, string>) {
       case "paragraph":
         rows.push({
           kind: node === tree.children[1] ? "contact" : "paragraph",
-          runs: inline(node.children),
+          runs: inline(node.children).filter(run => node !== tree.children[1] || !run.icon),
           indent,
           bullet,
         });
@@ -166,6 +176,9 @@ function makeRows(markdown: string, trackingLinks: Map<string, string>) {
       for (let index = firstRow; index < rows.length; index++) rows[index].compact = true;
     }
   }
+  for (const row of rows) {
+    if (row.entryLine === 0) row.runs = row.runs.map(run => run.link ? { ...run, small: true } : run);
+  }
   return { rows, retainedTracking: [...retainedTracking] };
 }
 
@@ -206,6 +219,7 @@ function wrapRuns(doc: PDFKit.PDFDocument, fonts: ResumeFonts, runs: Run[], widt
   let line: PlacedRun[] = [];
   let lineWidth = 0;
   let spacing = "";
+  const rowSize = (doc as unknown as { _fontSize: number })._fontSize;
 
   function flush() {
     lines.push(line);
@@ -226,7 +240,15 @@ function wrapRuns(doc: PDFKit.PDFDocument, fonts: ResumeFonts, runs: Run[], widt
   }
 
   for (const run of runs) {
-    doc.font(fonts[fontOf(run)]);
+    doc.font(fonts[fontOf(run)]).fontSize(run.small ? bodySize : rowSize);
+    if (run.icon) {
+      const iconWidth = iconSize + iconGap + iconPadding;
+      if (line.length && lineWidth + iconWidth > width) flush();
+      line.push({ ...run, width: iconWidth });
+      lineWidth += iconWidth;
+      spacing = "";
+      continue;
+    }
     for (const part of run.text.match(/\n|[^\S\n]+|\S+/gu) ?? []) {
       if (part === "\n") {
         flush();
@@ -311,11 +333,70 @@ function paintRow(doc: PDFKit.PDFDocument, fonts: ResumeFonts, row: Row) {
     if (index === 0 && row.bullet !== undefined) {
       doc.font(fonts.regular).text(row.bullet, lineLeft - bulletWidth, y, { lineBreak: false });
     }
+    const ascentAt = (size: number) =>
+      (doc as unknown as { _font: { ascender: number } })._font.ascender / 1000 * size;
+    doc.font(fonts.regular).fontSize(fontSize);
+    const rowBaseline = y + ascentAt(fontSize);
+    const sizeOf = (run: PlacedRun) => run.small ? bodySize : fontSize;
+    const baselineOf = (run: PlacedRun) =>
+      run.small ? rowBaseline - 0.35 * (fontSize - bodySize) : rowBaseline;
+
+    let cursor = x;
+    let span: { link: string; start: number; end: number; run: PlacedRun } | undefined;
+    const spans: Array<{ start: number; end: number; run: PlacedRun }> = [];
     for (const run of line) {
-      doc.font(fonts[fontOf(run)]).text(run.text, x, y, { lineBreak: false });
-      if (run.link && run.width > 0) doc.link(x, y, run.width, lineHeight, run.link);
+      if (!run.link) {
+        if (span) spans.push(span);
+        span = undefined;
+        cursor += run.width;
+        continue;
+      }
+      let start = cursor;
+      let end = cursor + run.width;
+      if (!run.icon) {
+        doc.font(fonts[fontOf(run)]).fontSize(sizeOf(run));
+        start += doc.widthOfString(run.text.slice(0, run.text.length - run.text.trimStart().length));
+        end -= doc.widthOfString(run.text.slice(run.text.trimEnd().length));
+      }
+      if (span && span.link === run.link) span.end = end;
+      else {
+        if (span) spans.push(span);
+        span = { link: run.link, start, end, run };
+      }
+      cursor += run.width;
+    }
+    if (span) spans.push(span);
+    for (const { start, end, run } of spans) {
+      const size = sizeOf(run);
+      doc.save().fillColor(linkHighlight)
+        .roundedRect(start - 1.6, baselineOf(run) - size * 0.86, end - start + 3.2, size * 1.14, 2.2).fill().restore();
+    }
+
+    for (const run of line) {
+      const base = row.entryLine === 2 ? "#555555" : "black";
+      const size = sizeOf(run);
+      const baseline = baselineOf(run);
+      doc.font(fonts[fontOf(run)]).fontSize(size);
+      if (run.icon) {
+        const k = iconSize / 24;
+        const left = x + iconGap;
+        const top = baseline - iconSize * 0.92;
+        doc.save().translate(left, top).scale(k).lineWidth(2.6).lineCap("round").lineJoin("round").strokeColor(linkColor)
+          .path("M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6").stroke()
+          .path("M15 3h6v6").stroke()
+          .path("M10 14L21 3").stroke().restore();
+        doc.link(left, top, iconSize, iconSize, run.link!);
+        x += run.width;
+        continue;
+      }
+      const textY = baseline - ascentAt(size);
+      doc.fillColor(run.link ? linkColor : base);
+      doc.text(run.text, x, textY, { lineBreak: false });
+      if (run.link && run.width > 0) doc.link(x, textY, run.width, size * 1.2, run.link);
+      doc.fillColor(base);
       x += run.width;
     }
+    doc.font(fonts.regular).fontSize(fontSize);
     doc.y = y + lineHeight;
   }
   if (row.entryLine === 2) doc.fillColor("black");
