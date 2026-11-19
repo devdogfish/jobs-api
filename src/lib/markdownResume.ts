@@ -44,6 +44,8 @@ type Row = {
   bullet?: string;
   compact?: boolean;
   experienceStart?: "first" | "next";
+  /** Line within an experience entry heading: 0 company, 1 title, 2 description. */
+  entryLine?: number;
 };
 
 function makeRows(markdown: string, trackingLinks: Map<string, string>) {
@@ -139,6 +141,7 @@ function makeRows(markdown: string, trackingLinks: Map<string, string>) {
   }
   let inExperience = false;
   let hasExperienceEntry = false;
+  let entryLine = -1;
   for (const node of tree.children) {
     if (node.type === "heading" && node.depth === 2) {
       inExperience = /\bexperience\b/i.test(inline(node.children).map(run => run.text).join(""));
@@ -152,7 +155,12 @@ function makeRows(markdown: string, trackingLinks: Map<string, string>) {
     block(node);
     if (entry) {
       rows[firstRow].experienceStart = hasExperienceEntry ? "next" : "first";
+      rows[firstRow].entryLine = entryLine = 0;
       hasExperienceEntry = true;
+    } else if (inExperience && node.type === "paragraph" && entryLine >= 0 && entryLine < 2) {
+      rows[firstRow].entryLine = ++entryLine;
+    } else {
+      entryLine = -1;
     }
     if (hasExperienceEntry) {
       for (let index = firstRow; index < rows.length; index++) rows[index].compact = true;
@@ -268,7 +276,8 @@ function paintRow(doc: PDFKit.PDFDocument, fonts: ResumeFonts, row: Row) {
   }
 
   const heading = row.kind === "section" || row.kind === "subheading";
-  const fontSize = row.kind === "name" ? 20 : row.kind === "section" ? 12 : 10;
+  const fontSize = row.kind === "name" ? 20 : row.kind === "section" ? 12
+    : row.entryLine === 0 ? 11.5 : row.entryLine === 2 ? 9 : 10;
   const bulletWidth = row.bullet === undefined ? 0 : row.bullet === "•" ? 20 : 28;
   const lineLeft = left + (row.indent ?? 0) + bulletWidth;
   const available = doc.page.width - right - lineLeft;
@@ -282,13 +291,16 @@ function paintRow(doc: PDFKit.PDFDocument, fonts: ResumeFonts, row: Row) {
   const lines = wrapRuns(doc, fonts, runs, available);
   const gap = row.experienceStart === "next" ? lineHeight
     : row.kind === "section" ? lineHeight * 0.6
-    : heading && !row.compact ? lineHeight * 0.3 : 0;
+    : heading && !row.compact ? lineHeight * 0.3
+    : row.entryLine === 1 || row.entryLine === 2 ? lineHeight * 0.15
+    : row.bullet !== undefined ? lineHeight * 0.25 : 0;
   const nextLine = row.experienceStart ? lineHeight * 3.5 : heading ? lineHeight * 1.7 : 0;
   if (doc.y + gap + Math.min(lines.length, 2) * lineHeight + nextLine > pageBottom) {
     doc.addPage();
   } else {
     doc.y += gap;
   }
+  if (row.entryLine === 2) doc.fillColor("#555555");
   for (const [index, line] of lines.entries()) {
     if (doc.y + lineHeight > pageBottom) doc.addPage();
     const y = doc.y;
@@ -306,6 +318,7 @@ function paintRow(doc: PDFKit.PDFDocument, fonts: ResumeFonts, row: Row) {
     }
     doc.y = y + lineHeight;
   }
+  if (row.entryLine === 2) doc.fillColor("black");
 
   if (row.kind === "section") {
     drawResumeSectionRule(doc.font(fonts.bold), left - 2, doc.page.width - right + 1);
