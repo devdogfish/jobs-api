@@ -30,8 +30,49 @@ export function renderSectionTitle(
   lineEnd: number,
 ) {
   doc.fontSize(12).font(fontBold).text(title);
-  doc.moveDown(0.125); // 3px gap (approximately 0.125 inches at 72 DPI)
+  drawResumeSectionRule(doc, lineStart, lineEnd);
+}
+
+export function drawResumeSectionRule(
+  doc: PDFKit.PDFDocument,
+  lineStart: number,
+  lineEnd: number,
+) {
+  doc.moveDown(0.125);
   doc.moveTo(lineStart, doc.y).lineTo(lineEnd, doc.y).stroke().moveDown(0.5);
+}
+
+export type ResumeFonts = {
+  regular: string;
+  bold: string;
+  italic: string;
+  boldItalic: string;
+};
+
+export function registerResumeFonts(
+  doc: PDFKit.PDFDocument,
+  hasCambria: boolean,
+  fonts: ResumeFonts,
+): ResumeFonts {
+  if (!hasCambria) {
+    return {
+      regular: "Helvetica",
+      bold: "Helvetica-Bold",
+      italic: "Helvetica-Oblique",
+      boldItalic: "Helvetica-BoldOblique",
+    };
+  }
+
+  doc.registerFont("Cambria", fonts.regular);
+  doc.registerFont("Cambria-Bold", fonts.bold);
+  doc.registerFont("Cambria-Italic", fonts.italic);
+  doc.registerFont("Cambria-BoldItalic", fonts.boldItalic);
+  return {
+    regular: "Cambria",
+    bold: "Cambria-Bold",
+    italic: "Cambria-Italic",
+    boldItalic: "Cambria-BoldItalic",
+  };
 }
 
 // Helper function to render bullet points with proper Word-like formatting
@@ -71,12 +112,7 @@ export function renderBullets(
 export async function generateResumePDFBuffer(
   data: MasterResume,
   hasCambria: boolean,
-  fonts: {
-    regular: string;
-    bold: string;
-    italic: string;
-    boldItalic: string;
-  },
+  fonts: ResumeFonts,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 25 });
@@ -87,18 +123,8 @@ export async function generateResumePDFBuffer(
     doc.on("end", () => resolve(Buffer.concat(chunks as any)));
     doc.on("error", reject);
 
-    // Register Cambria fonts if available
-    if (hasCambria) {
-      doc.registerFont("Cambria", fonts.regular);
-      doc.registerFont("Cambria-Bold", fonts.bold);
-      doc.registerFont("Cambria-Italic", fonts.italic);
-      doc.registerFont("Cambria-BoldItalic", fonts.boldItalic);
-    }
-
-    // Set font names based on availability
-    const fontRegular = hasCambria ? "Cambria" : "Helvetica";
-    const fontBold = hasCambria ? "Cambria-Bold" : "Helvetica-Bold";
-    const fontItalic = hasCambria ? "Cambria-Italic" : "Helvetica-Oblique";
+    const { regular: fontRegular, bold: fontBold, italic: fontItalic } =
+      registerResumeFonts(doc, hasCambria, fonts);
     const lineStart = 23; // Start 2 pixels earlier (25 - 2)
     const lineEnd = 588;
 
