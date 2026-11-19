@@ -86,3 +86,5 @@ Generate password hash:
 ```bash
 node -e "console.log(require('bcryptjs').hashSync('password', 10))"
 ```
+
+Optional production `RENDER_API_KEY` grants access only to `POST /render-resume`. The existing `API_KEY` continues to authenticate its current routes, including rendering.
